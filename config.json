@@ -1,0 +1,21 @@
+{
+    "sites": [
+        {
+            "name": "Petaluma Downtown",
+            "url": "https://petalumadowntown.com/calendar",
+            "selectors": {
+                "events": ".viewerArea__main.ng-scope .event-item",
+                "titles": ".event-title, .event-name",
+                "dates": {
+                    "path": ".event-date, .event-time",
+                    "attribute": "text"
+                }
+            }
+        }
+    ],
+    "preferences": {
+        "interests": ["music", "art", "food"],
+        "exclude": ["sports"],
+        "days_available": ["weekend", "friday evening"]
+    }
+}
