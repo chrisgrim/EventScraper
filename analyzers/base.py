@@ -7,6 +7,6 @@ class BaseAnalyzer(ABC):
         self.config = config or {}
     
     @abstractmethod
-    def analyze(self, events):
+    async def analyze(self, events):
         """Analyze events and return recommendations"""
         pass
