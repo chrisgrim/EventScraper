@@ -17,50 +17,120 @@ class EmailNotifier(NotificationHandler):
             <html>
                 <head>
                     <style>
-                        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                        .event {{ 
-                            margin: 20px 0;
-                            padding: 15px;
-                            border-left: 4px solid #4CAF50;
-                            background-color: #f9f9f9;
+                        * {{
+                            box-sizing: border-box;
+                            margin: 0;
+                            padding: 0;
                         }}
-                        .score {{ 
-                            font-weight: bold;
-                            color: #4CAF50;
+
+                        body {{
+                            font-family: Arial, sans-serif;
+                            line-height: 1.6;
+                            color: #333;
+                            max-width: 1200px;
+                            margin: 0 auto;
+                            padding: 20px;
                         }}
-                        .title {{ 
-                            font-size: 18px;
-                            color: #2196F3;
+
+                        h1 {{
+                            text-align: center;
+                            margin-bottom: 30px;
+                            color: #2c3e50;
                         }}
-                        .datetime {{ 
-                            color: #666;
-                            font-style: italic;
+
+                        h2 {{
+                            margin-top: 40px;
+                            margin-bottom: 20px;
+                            color: #2c3e50;
+                            border-bottom: 2px solid #3498db;
+                            padding-bottom: 10px;
                         }}
-                        .image {{
-                            margin: 10px 0;
-                            max-width: 100%;
+
+                        [data-type="event-grid"] {{
+                            display: grid;
+                            grid-template-columns: repeat(4, 1fr);
+                            gap: 20px;
+                            margin-bottom: 30px;
                         }}
-                        .image img {{
-                            max-width: 300px;
-                            height: auto;
+
+                        [data-type="event-card"] {{
+                            display: flex;
+                            flex-direction: column;
+                            gap: 10px;
+                            background: #fff;
                             border-radius: 8px;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            overflow: hidden;
+                            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
                         }}
-                        .explanation {{ 
-                            margin-top: 10px;
-                            color: #555;
+
+                        [data-type="image-container"] {{
+                            aspect-ratio: 3/4;
+                            overflow: hidden;
+                        }}
+
+                        [data-type="image-container"] img {{
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }}
+
+                        [data-type="title"] {{
+                            font-weight: bold;
+                            padding: 0 10px;
+                        }}
+
+                        [data-type="title"] a {{
+                            color: #2c3e50;
+                            text-decoration: none;
+                        }}
+
+                        [data-type="title"] a:hover {{
+                            color: #3498db;
+                        }}
+
+                        [data-type="datetime"] {{
+                            color: #666;
+                            font-size: 0.9em;
+                            padding: 0 10px;
+                        }}
+
+                        [data-type="description"] {{
+                            font-size: 0.9em;
+                            padding: 0 10px 10px;
+                            overflow: hidden;
+                            display: -webkit-box;
+                            -webkit-line-clamp: 3;
+                            -webkit-box-orient: vertical;
+                        }}
+
+                        @media (max-width: 1024px) {{
+                            [data-type="event-grid"] {{
+                                grid-template-columns: repeat(3, 1fr);
+                            }}
+                        }}
+
+                        @media (max-width: 768px) {{
+                            [data-type="event-grid"] {{
+                                grid-template-columns: repeat(2, 1fr);
+                            }}
+                        }}
+
+                        @media (max-width: 480px) {{
+                            [data-type="event-grid"] {{
+                                grid-template-columns: 1fr;
+                            }}
                         }}
                     </style>
                 </head>
                 <body>
-                    <h2>🎭 Petaluma Event Recommendations</h2>
+                    <h1>🎭 Upcoming Events</h1>
                     {message}
                 </body>
             </html>
             """
             
             msg = MIMEText(html, 'html')
-            msg['Subject'] = '🎪 Petaluma Event Recommendations'
+            msg['Subject'] = '🎪 Upcoming Events'
             msg['From'] = self.username
             msg['To'] = self.recipient
             

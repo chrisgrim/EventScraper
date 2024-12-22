@@ -5,6 +5,7 @@ from scrapers.petaluma import PetalumaScraper
 from analyzers.claude import ClaudeAnalyzer
 from notifications.email import EmailNotifier
 from scrapers.california import CaliforniaTheatreScraper
+from scrapers.northbay import NorthBayScraper
 from datetime import datetime
 
 class WebMonitor:
@@ -18,7 +19,8 @@ class WebMonitor:
         """Initialize all scrapers"""
         return {
             'petaluma': PetalumaScraper(self.config.get('petaluma', {})),
-            'california': CaliforniaTheatreScraper(self.config.get('california', {}))
+            'california': CaliforniaTheatreScraper(self.config.get('california', {})),
+            'northbay': NorthBayScraper(self.config.get('northbay', {}))
         }
     
     def _setup_analyzer(self):

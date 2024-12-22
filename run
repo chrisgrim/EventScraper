@@ -1,0 +1,8 @@
+#!/bin/bash
+docker stop web-monitor
+docker rm web-monitor
+docker build --no-cache -t web-monitor .
+docker run --rm \
+  --env-file .env \
+  web-monitor \
+  python monitor.py

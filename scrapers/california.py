@@ -46,19 +46,40 @@ class CaliforniaTheatreScraper(BaseScraper):
             browser = await p.chromium.launch()
             try:
                 page = await browser.new_page()
-                await page.goto('https://www.caltheatre.com/')
+                logging.info("Navigating to California Theatre site...")
                 
-                # Wait for events to load
-                await page.wait_for_selector('[data-hook="event-list-item"]')
+                # Add timeout and wait until network is idle
+                await page.goto('https://www.caltheatre.com/', 
+                              wait_until='networkidle',
+                              timeout=30000)  # 30 second timeout
                 
+                logging.info("Page loaded, looking for events...")
+                
+                # Wait for events to load with timeout
+                try:
+                    await page.wait_for_selector('[data-hook="event-list-item"]', 
+                                              timeout=10000)  # 10 second timeout
+                except Exception as e:
+                    logging.error(f"Timeout waiting for events: {e}")
+                    # Save page content for debugging
+                    html = await page.content()
+                    with open('cal_theatre_error.html', 'w', encoding='utf-8') as f:
+                        f.write(html)
+                    return []
+                
+                logging.info("Found event elements, extracting data...")
                 events = []
                 event_elements = await page.query_selector_all('[data-hook="event-list-item"]')
+                logging.info(f"Found {len(event_elements)} event elements")
                 
                 for element in event_elements:
                     try:
                         # Extract title
                         title = await element.query_selector('[data-hook="ev-list-item-title"]')
                         title_text = await title.inner_text() if title else None
+                        
+                        if title_text:
+                            logging.info(f"Processing event: {title_text}")
                         
                         # Extract date and time
                         date_element = await element.query_selector('[data-hook="ev-full-date-location"] [data-hook="date"]')
@@ -118,6 +139,7 @@ class CaliforniaTheatreScraper(BaseScraper):
                 
             except Exception as e:
                 logging.error(f"Failed to scrape California Theatre events: {e}")
+                logging.error(f"Error type: {type(e).__name__}")
                 return []
                 
             finally:

@@ -11,6 +11,18 @@
                     "attribute": "text"
                 }
             }
+        },
+        {
+            "name": "North Bay Stage & Screen",
+            "url": "https://northbaystageandscreen.com/onstage/",
+            "selectors": {
+                "events": "p, div.wp-block-image",
+                "titles": "strong",
+                "dates": {
+                    "path": ".has-text-align-center",
+                    "attribute": "text"
+                }
+            }
         }
     ],
     "preferences": {
