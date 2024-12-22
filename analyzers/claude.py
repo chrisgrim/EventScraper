@@ -327,6 +327,11 @@ class ClaudeAnalyzer(BaseAnalyzer):
         
         formatted_datetime = ' and '.join(formatted_dates)
         
+        # Create title with link if URL exists
+        title_html = event["title"]
+        if event.get("url"):
+            title_html = f'<a href="{event["url"]}" style="color:#2c3e50; text-decoration:none;">{event["title"]}</a>'
+        
         return f'''
             <div style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden;">
                 <div style="overflow:hidden;">
@@ -334,7 +339,7 @@ class ClaudeAnalyzer(BaseAnalyzer):
                 </div>
                 <div style="padding:15px;">
                     <div style="font-weight:bold; margin-bottom:8px;">
-                        {event["title"] if not event["url"] else f'<a href="{event["url"]}" style="color:#2c3e50; text-decoration:none; font-weight:bold">{event["title"]}</a>'}
+                        {title_html}
                     </div>
                     <div style="color:#666; font-size:0.9em; margin-bottom:8px;">
                         {formatted_datetime}

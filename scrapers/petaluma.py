@@ -21,7 +21,8 @@ class PetalumaScraper(BaseScraper):
                     'title': event['title'],  # Keep original case
                     'datetimes': [event['datetime']],
                     'description': event.get('description', ''),
-                    'image_url': event.get('image_url', '')
+                    'image_url': event.get('image_url', ''),
+                    'url': event.get('url', '')  # Add URL to the group
                 }
         
         # Convert groups back to events format, but with multiple dates
@@ -32,6 +33,7 @@ class PetalumaScraper(BaseScraper):
                 'datetime': ' and '.join(event_data['datetimes']),
                 'description': event_data['description'],
                 'image_url': event_data['image_url'],
+                'url': event_data['url'],  # Include URL in final event
                 'multiple_dates': len(event_data['datetimes']) > 1
             })
             
@@ -106,9 +108,17 @@ class PetalumaScraper(BaseScraper):
                 cards.forEach(card => {
                     const event = {};
                     
-                    // Extract title
+                    // Extract title and URL
                     const titleElement = card.querySelector('.pincard__main__title a');
-                    event.title = titleElement ? titleElement.textContent.trim() : '';
+                    if (titleElement) {
+                        event.title = titleElement.textContent.trim();
+                        event.url = titleElement.href;
+                        // Convert relative URL to absolute
+                        if (event.url && event.url.startsWith('/')) {
+                            event.url = 'https://tockify.com' + event.url;
+                        }
+                        console.log("Found URL:", event.url); // Debug log
+                    }
                     
                     // Extract date/time
                     const dateElement = card.querySelector('.pincard__main__when');
@@ -118,9 +128,10 @@ class PetalumaScraper(BaseScraper):
                     const descElement = card.querySelector('.pincard__main__preview');
                     event.description = descElement ? descElement.textContent.trim() : '';
                     
-                    // Extract image URL
-                    const imgElement = card.querySelector('.pincard__imageSection__image');
+                    // Extract image URL - try multiple selectors
+                    const imgElement = card.querySelector('.pincard__imageSection__image[src], .pincard__imageSection img[src]');
                     event.image_url = imgElement ? imgElement.src : '';
+                    console.log("Found image URL:", event.image_url); // Debug log
                     
                     if (event.title) {
                         events.push(event);
@@ -131,16 +142,21 @@ class PetalumaScraper(BaseScraper):
             }''')
             
             logging.info(f"Extracted {len(events)} events")
+            for event in events:
+                if event.get('url'):
+                    logging.info(f"Event '{event['title']}' has URL: {event['url']}")
+                else:
+                    logging.warning(f"No URL found for event: {event['title']}")
+                
+                # Debug image URLs too
+                if event.get('image_url'):
+                    logging.info(f"Event '{event['title']}' has image: {event['image_url']}")
+                else:
+                    logging.warning(f"No image found for event: {event['title']}")
+                
             return events
             
         except Exception as e:
             logging.error(f"Failed to extract events: {e}")
             logging.error(f"Error details: {type(e).__name__}")
-            # Save page content on error for debugging
-            try:
-                html = await page.content()
-                with open('error_page.html', 'w', encoding='utf-8') as f:
-                    f.write(html)
-            except:
-                pass
             return []

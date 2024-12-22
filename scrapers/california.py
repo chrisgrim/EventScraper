@@ -2,6 +2,7 @@ from .base import BaseScraper
 from playwright.async_api import async_playwright
 import logging
 from datetime import datetime
+import re
 
 class CaliforniaTheatreScraper(BaseScraper):
     def _group_events(self, events):
@@ -91,7 +92,12 @@ class CaliforniaTheatreScraper(BaseScraper):
                         
                         # Extract image URL
                         img = await element.query_selector('img')
-                        img_url = await img.get_attribute('src') if img else None
+                        if img:
+                            img_url = await img.get_attribute('src')
+                            if img_url:
+                                # Strip everything after first occurrence of .jpg, .png, or .webp
+                                img_url = re.sub(r'(\.(?:jpg|jpeg|png|webp)).*$', r'\1', img_url)
+                                logging.info(f"Cleaned image URL: {img_url}")
                         
                         # Extract ticket URL
                         ticket_link = await element.query_selector('[data-hook="ev-rsvp-button"]')
@@ -116,7 +122,7 @@ class CaliforniaTheatreScraper(BaseScraper):
                                 'datetime': datetime_obj,
                                 'description': desc_text,
                                 'image_url': img_url,
-                                'ticket_url': ticket_url,
+                                'url': ticket_url,
                                 'venue': 'California Theatre'
                             })
                             

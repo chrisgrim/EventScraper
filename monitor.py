@@ -10,6 +10,12 @@ from datetime import datetime
 
 class WebMonitor:
     def __init__(self):
+        # Add debug flags
+        self.DEBUG = {
+            'SCRAPE_ONLY': False,  # Only run scraping
+            'SKIP_CLAUDE': False,   # Skip Claude analysis
+            'SKIP_EMAIL': False     # Skip email sending
+        }
         self.config = self.load_config()
         self.scrapers = self._setup_scrapers()
         self.analyzer = self._setup_analyzer()
@@ -39,6 +45,13 @@ class WebMonitor:
                 logging.info(f"Scraping events from {name}...")
                 events = await scraper.scrape()
                 logging.info(f"Found {len(events)} events from {name}")
+                
+                # Add debug logging for each event's image URL
+                for event in events:
+                    logging.info(f"Event from {name}: {event['title']}")
+                    logging.info(f"Image URL: {event.get('image_url', 'No image URL found')}")
+                    logging.info(f"Event URL: {event.get('url', event.get('ticket_url', 'No URL found'))}")
+                
                 all_events.extend(events)
             except Exception as e:
                 logging.error(f"Failed to scrape {name}: {e}")
@@ -66,25 +79,36 @@ class WebMonitor:
     async def run(self):
         """Main execution flow"""
         try:
-            logging.info("Starting web monitor...")
+            logging.info("\n=== STARTING WEB MONITOR ===")
             
             # 1. Scrape events
+            logging.info("\n--- SCRAPING EVENTS ---")
             events = await self._scrape_all_events()
             
+            if self.DEBUG['SCRAPE_ONLY']:
+                logging.info("\n=== DEBUG: STOPPING AFTER SCRAPE ===")
+                return events
+            
             # 2. Analyze with Claude
-            if events:
-                prepared_events = self._prepare_events_for_analysis(events)
-                recommendations = await self._analyze_events(prepared_events)
-                
-                # 3. Send notifications
-                if recommendations:
-                    logging.info("Sending notifications...")
-                    self.send_notification(recommendations)
-                    logging.info("Process completed successfully")
+            if not self.DEBUG['SKIP_CLAUDE']:
+                logging.info("\n--- ANALYZING WITH CLAUDE ---")
+                if events:
+                    prepared_events = self._prepare_events_for_analysis(events)
+                    recommendations = await self._analyze_events(prepared_events)
                 else:
-                    logging.warning("No recommendations generated")
+                    logging.warning("No events to analyze")
+                    return
             else:
-                logging.warning("No events found to analyze")
+                logging.info("\n=== DEBUG: SKIPPING CLAUDE ANALYSIS ===")
+                return
+            
+            # 3. Send notifications
+            if not self.DEBUG['SKIP_EMAIL'] and recommendations:
+                logging.info("\n--- SENDING EMAIL ---")
+                self.send_notification(recommendations)
+                logging.info("Process completed successfully")
+            else:
+                logging.info("\n=== DEBUG: SKIPPING EMAIL ===")
             
         except Exception as e:
             logging.error(f"Run failed: {e}")
@@ -131,7 +155,13 @@ class WebMonitor:
         """Analyze events using configured analyzer"""
         try:
             if self.analyzer:
-                return await self.analyzer.analyze(events)
+                recommendations = await self.analyzer.analyze(events)
+                # Add debug logging
+                logging.info(f"Claude returned {len(recommendations) if recommendations else 0} recommendations")
+                logging.info("Recommendations received:")
+                for rec in recommendations:
+                    logging.info(f"- {rec}")
+                return recommendations
             else:
                 logging.warning("No analyzer configured")
                 return None
