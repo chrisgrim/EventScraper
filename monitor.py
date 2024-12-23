@@ -157,10 +157,13 @@ class WebMonitor:
             if self.analyzer:
                 recommendations = await self.analyzer.analyze(events)
                 # Add debug logging
-                logging.info(f"Claude returned {len(recommendations) if recommendations else 0} recommendations")
-                logging.info("Recommendations received:")
-                for rec in recommendations:
-                    logging.info(f"- {rec}")
+                logging.info(f"\nClaude returned {len(recommendations) if recommendations else 0} recommendations")
+                logging.info("\nRecommendations received:")
+                if isinstance(recommendations, list):
+                    for rec in recommendations:
+                        logging.info(f"\n{rec}")
+                else:
+                    logging.info(f"\nRaw response: {recommendations}")
                 return recommendations
             else:
                 logging.warning("No analyzer configured")
