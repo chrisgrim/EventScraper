@@ -1,5 +1,5 @@
 from .base import BaseScraper
-from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 import logging
 from datetime import datetime
 import re
@@ -50,98 +50,75 @@ class NorthBayScraper(BaseScraper):
         truncated = ' '.join(words[:word_limit])
         return f"{truncated}..."
 
-    async def scrape(self):
+    def scrape(self):  # Remove async
         """Scrape North Bay Stage & Screen events"""
-        async with async_playwright() as p:
-            browser = await p.chromium.launch()
+        with sync_playwright() as p:  # Change to with and sync_playwright
+            browser = p.chromium.launch()  # Remove await
             try:
-                page = await browser.new_page()
-                await page.goto('https://northbaystageandscreen.com/onstage/')
+                page = browser.new_page()  # Remove await
+                page.goto('https://northbaystageandscreen.com/onstage/')  # Remove await
                 
                 events = []
                 current_event = {}
                 
-                # Get all sections that could be part of an event
-                sections = await page.query_selector_all('div.wp-block-image, p')
+                sections = page.query_selector_all('div.wp-block-image, p')  # Remove await
                 
-                for i, section in enumerate(sections):
-                    text = await section.inner_text()
-                    tag_name = await section.evaluate('el => el.tagName.toLowerCase()')
+                for section in sections:
+                    text = section.inner_text()  # Remove await
+                    tag_name = section.evaluate('el => el.tagName.toLowerCase()')  # Remove await
                     
-                    # If we find an image div, it's the start of a new event
                     if tag_name == 'div':
-                        # Save previous event if it exists
                         if current_event and 'title' in current_event:
                             events.append(current_event)
                         
-                        # Start new event
                         current_event = {}
                         
-                        # Extract image
                         try:
-                            img = await section.query_selector('img')
+                            img = section.query_selector('img')  # Remove await
                             if img:
-                                orig_file = await img.get_attribute('data-orig-file')
-                                src = await img.get_attribute('src')
+                                orig_file = img.get_attribute('data-orig-file')  # Remove await
+                                src = img.get_attribute('src')  # Remove await
                                 current_event['image_url'] = orig_file or src
-                                logging.info(f"Found image URL: {current_event['image_url']}")
                         except Exception as e:
                             logging.error(f"Error extracting image: {e}")
                     
-                    # Process text content
                     elif tag_name == 'p':
-                        # Debug: Log the class attribute
-                        class_attr = await section.get_attribute('class')
-                        logging.info(f"Found paragraph with class: {class_attr}")
-                        
-                        # Try to get any link with noopener, regardless of container class
-                        link = await section.query_selector('a[rel*="noopener"]')
+                        link = section.query_selector('a[rel*="noopener"]')  # Remove await
                         if link:
-                            url = await link.get_attribute('href')
-                            logging.info(f"Found link with href: {url}")
-                            if current_event:  # Make sure we have a current event to add the URL to
+                            url = link.get_attribute('href')  # Remove await
+                            if current_event:
                                 current_event['url'] = url
-                                logging.info(f"Added URL to event: {current_event.get('title', 'Untitled')}")
                         
-                        if '***' in text:  # Divider between shows
+                        if '***' in text or not text.strip():
                             continue
                             
-                        if not text.strip():
-                            continue
-                            
-                        # Extract title and theater
-                        if await section.query_selector('strong'):
-                            title_text = await section.inner_text()
-                            if ' – ' in title_text:  # Title and theater are separated by em dash
+                        if section.query_selector('strong'):  # Remove await
+                            title_text = section.inner_text()  # Remove await
+                            if ' – ' in title_text:
                                 title, theater = title_text.split(' – ', 1)
                                 current_event['title'] = title.strip()
                                 current_event['venue'] = theater.strip()
                         
-                        # Extract dates and location
-                        if 'has-text-align-center' in (await section.get_attribute('class') or ''):
+                        if 'has-text-align-center' in (section.get_attribute('class') or ''):  # Remove await
                             if any(month in text for month in ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']):
                                 try:
-                                    # Example: "Napa * January 31 – February 22"
                                     location, date_range = text.split('*')
                                     current_event['venue'] = location.strip()
                                     current_event['datetime'] = date_range.strip()
-                                except Exception as e:
-                                    logging.error(f"Error parsing date: {text} - {e}")
+                                except Exception:
                                     current_event['datetime'] = text.strip()
                         
-                        # Extract description
-                        elif not 'has-text-align-center' in (await section.get_attribute('class') or ''):
-                            desc = await section.inner_text()
+                        elif not 'has-text-align-center' in (section.get_attribute('class') or ''):  # Remove await
+                            desc = section.inner_text()  # Remove await
                             if desc and not desc.startswith('with ') and 'Directed by' not in desc:
                                 current_event['description'] = self._truncate_description(desc.strip())
                 
-                # Add the last event if exists
                 if current_event and 'title' in current_event:
                     events.append(current_event)
                 
-                # Group events with same title
                 events = self._group_events(events)
                 
+                logging.info(f"Successfully scraped {len(events)} events from North Bay Stage & Screen")
                 return events
                 
             except Exception as e:
@@ -149,4 +126,4 @@ class NorthBayScraper(BaseScraper):
                 return []
                 
             finally:
-                await browser.close()
+                browser.close()  # Remove await

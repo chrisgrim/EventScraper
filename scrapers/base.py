@@ -8,7 +8,7 @@ class BaseScraper(ABC):
         self.config = config or {}
         
     @abstractmethod
-    async def scrape(self):
+    def scrape(self):
         """Scrape events from the source"""
         pass
     

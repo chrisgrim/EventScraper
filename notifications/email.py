@@ -31,20 +31,31 @@ class EmailNotifier(NotificationHandler):
             
             logging.info("Message parts attached successfully")
             
-            # More robust SMTP connection handling
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)  # Increased timeout
+            # Use SMTP_SSL instead of SMTP for port 465
+            logging.info(f"Connecting to SMTP server {self.smtp_server}:{self.smtp_port}")
+            server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
+            
             try:
-                logging.info("Connecting to SMTP server...")
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                logging.info("Starting TLS...")
+                logging.info("Starting SMTP connection...")
                 server.login(self.username, self.password)
-                logging.info("Logged in successfully...")
+                logging.info("Logged in successfully")
                 server.send_message(msg)
                 logging.info("Message sent successfully")
+            except smtplib.SMTPServerDisconnected as e:
+                logging.error(f"Server disconnected: {e}")
+                raise
+            except smtplib.SMTPResponseException as e:
+                logging.error(f"SMTP error code {e.smtp_code}: {e.smtp_error}")
+                raise
+            except Exception as e:
+                logging.error(f"SMTP operation failed: {e}")
+                raise
             finally:
-                server.quit()
+                try:
+                    server.quit()
+                    logging.info("SMTP connection closed")
+                except Exception as e:
+                    logging.error(f"Error closing connection: {e}")
                 
         except smtplib.SMTPServerDisconnected as e:
             logging.error(f"SMTP Server disconnected: {e}")
