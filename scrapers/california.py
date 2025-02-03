@@ -10,26 +10,38 @@ class CaliforniaTheatreScraper(BaseScraper):
         event_groups = {}
         
         for event in events:
-            title = event['title'].lower()
-            if title in event_groups:
-                event_groups[title]['datetimes'].append(event['datetime'])
-                event_groups[title]['datetimes'].sort()
+            # Create a key that includes more than just title to ensure proper grouping
+            key = f"{event['title'].lower()}_{event.get('description', '')}"
+            
+            if key in event_groups:
+                # Keep all event details the same, just add the new datetime
+                event_groups[key]['datetimes'].append(event['datetime'])
+                event_groups[key]['datetimes'].sort()  # Sort chronologically
             else:
-                event_groups[title] = {
+                # Store all event details
+                event_groups[key] = {
                     'title': event['title'],
                     'datetimes': [event['datetime']],
                     'description': event.get('description', ''),
-                    'image_url': event.get('image_url', '')
+                    'image_url': event.get('image_url', ''),
+                    'url': event.get('url', ''),
+                    'venue': event.get('venue', 'California Theatre'),
+                    'venue_url': event.get('venue_url', 'https://www.caltheatre.com/')
                 }
         
+        # Convert groups back to list format
         grouped_events = []
         for event_data in event_groups.values():
+            # Format all datetimes in ISO format
+            datetime_strs = [dt.strftime('%Y-%m-%d %H:%M:%S') for dt in event_data['datetimes']]
             grouped_events.append({
                 'title': event_data['title'],
-                'datetime': ' and '.join(event_data['datetimes']),
+                'datetime': ' and '.join(datetime_strs),
                 'description': event_data['description'],
                 'image_url': event_data['image_url'],
-                'multiple_dates': len(event_data['datetimes']) > 1
+                'url': event_data['url'],
+                'venue': event_data['venue'],
+                'venue_url': event_data['venue_url']
             })
         
         return grouped_events
@@ -68,9 +80,34 @@ class CaliforniaTheatreScraper(BaseScraper):
                         title = await element.query_selector('[data-hook="ev-list-item-title"]')
                         title_text = await title.inner_text() if title else None
                         
-                        # Extract date and time
-                        date_element = await element.query_selector('[data-hook="ev-full-date-location"] [data-hook="date"]')
-                        date_text = await date_element.inner_text() if date_element else None
+                        # First try to get the date from the compact format
+                        date_compact = await element.query_selector('[data-hook="ev-date"]')
+                        compact_text = await date_compact.inner_text() if date_compact else None
+                        
+                        # Then get the full date for the time
+                        date_full = await element.query_selector('[data-hook="date"]')
+                        full_text = await date_full.inner_text() if date_full else None
+                        
+                        datetime_obj = None
+                        if compact_text and full_text:
+                            try:
+                                # Extract the year from the full date
+                                year_match = re.search(r'\b\d{4}\b', full_text)
+                                year = year_match.group(0) if year_match else '2025'
+                                
+                                # Parse the time from the full date
+                                time_match = re.search(r'(\d{1,2}:\d{2} [AP]M)', full_text)
+                                time_str = time_match.group(1) if time_match else '12:00 AM'
+                                
+                                # Combine the compact date with year and time
+                                # Convert "Mon, Feb 10" format to datetime
+                                date_parts = compact_text.split(', ')
+                                if len(date_parts) == 2:
+                                    month_day = date_parts[1]
+                                    datetime_str = f"{month_day} {year} {time_str}"
+                                    datetime_obj = datetime.strptime(datetime_str, '%b %d %Y %I:%M %p')
+                            except Exception as e:
+                                logging.error(f"Failed to parse date '{compact_text}' with '{full_text}': {e}")
                         
                         # Extract description
                         desc = await element.query_selector('[data-hook="ev-list-item-description"]')
@@ -87,18 +124,6 @@ class CaliforniaTheatreScraper(BaseScraper):
                         ticket_link = await element.query_selector('[data-hook="ev-rsvp-button"]')
                         ticket_url = await ticket_link.get_attribute('href') if ticket_link else None
                         
-                        # Parse datetime
-                        datetime_obj = None
-                        if date_text:
-                            try:
-                                date_parts = date_text.split(',')
-                                date_str = f"{date_parts[0]}, {date_parts[1]}"
-                                time_str = date_parts[2].split('–')[0].strip()
-                                datetime_str = f"{date_str} {time_str}"
-                                datetime_obj = datetime.strptime(datetime_str, '%b %d, %Y %I:%M %p')
-                            except Exception as e:
-                                logging.error(f"Failed to parse date '{date_text}': {e}")
-                        
                         if title_text and datetime_obj:
                             events.append({
                                 'title': title_text,
@@ -106,7 +131,8 @@ class CaliforniaTheatreScraper(BaseScraper):
                                 'description': desc_text,
                                 'image_url': img_url,
                                 'url': ticket_url,
-                                'venue': 'California Theatre'
+                                'venue': 'California Theatre',
+                                'venue_url': 'https://www.caltheatre.com/'
                             })
                             
                     except Exception as e:
@@ -125,7 +151,10 @@ class CaliforniaTheatreScraper(BaseScraper):
                         break
                     
                 logging.info(f"Successfully scraped {len(events)} events from California Theatre")
-                return events
+                logging.info(f"Found {len(events)} individual event listings")
+                grouped_events = self._group_events(events)
+                logging.info(f"Grouped into {len(grouped_events)} unique events")
+                return grouped_events
                 
             except Exception as e:
                 logging.error(f"Failed to scrape California Theatre: {e}")

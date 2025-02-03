@@ -4,6 +4,7 @@ import logging
 from anthropic import Anthropic
 import json
 from .date_parser import DateParser
+import time  # Add this import at the top
 
 # Set up module-level logger
 logger = logging.getLogger(__name__)
@@ -13,6 +14,10 @@ class ClaudeAnalyzer(BaseAnalyzer):
         super().__init__(config)
         self.client = Anthropic(api_key=api_key)
         self.date_parser = DateParser()
+        # Add configuration for retries
+        self.max_retries = 3
+        self.batch_size = 5  # Reduced from 15
+        self.retry_delay = 1  # Base delay in seconds
         
     def _parse_datetime(self, datetime_str):
         return self.date_parser.parse(datetime_str)
@@ -38,6 +43,10 @@ class ClaudeAnalyzer(BaseAnalyzer):
         # Format date ranges for headers
         this_week_range = f"{week_start.strftime('%b %d')} - {this_week_end.strftime('%b %d')}"
         next_week_range = f"{(this_week_end + timedelta(days=1)).strftime('%b %d')} - {next_week_end.strftime('%b %d')}"
+        
+        logger.info(f"Date ranges:")
+        logger.info(f"This week: {this_week_range}")
+        logger.info(f"Next week: {next_week_range}")
         
         # Create date-based dictionaries for each section
         this_week_events = []
@@ -225,28 +234,56 @@ class ClaudeAnalyzer(BaseAnalyzer):
             
             html.append('</tr></table>')
 
+        # After categorizing events, log the results
+        logger.info("\nEvent categorization results:")
+        logger.info("\nThis week events:")
+        for event in this_week_events:
+            logger.info(f"- {event['title']}: {event['datetime']}")
+        
+        logger.info("\nNext week events:")
+        for event in next_week_events:
+            logger.info(f"- {event['title']}: {event['datetime']}")
+        
+        logger.info("\nFuture events:")
+        for event in future_events:
+            logger.info(f"- {event['title']}: {event['datetime']}")
+
         return '\n'.join(html)
     
     def _format_event_card(self, event):
         """Format a single event card with email-safe styles"""
         try:
             # Parse the datetime string
-            if ' and ' in event['datetime']:
-                date_strings = event['datetime'].split(' and ')
-            else:
-                date_strings = [event['datetime']]
-            
-            formatted_dates = []
-            for dt_str in date_strings:
+            formatted_datetime = event['datetime']
+            if ' to ' in event['datetime']:
+                # Handle date range format
+                start_date, end_date = event['datetime'].split(' to ')
                 try:
-                    dt = datetime.strptime(dt_str.strip(), '%Y-%m-%d %H:%M:%S')
-                    formatted_date = dt.strftime('%A %I:%M %p, %b %d %Y').replace(' 0', ' ')
-                    formatted_dates.append(formatted_date)
+                    start_dt = datetime.strptime(start_date.strip(), '%Y-%m-%d %H:%M:%S')
+                    end_dt = datetime.strptime(end_date.strip(), '%Y-%m-%d %H:%M:%S')
+                    formatted_datetime = f"{start_dt.strftime('%A %I:%M %p, %b %d %Y')} to {end_dt.strftime('%A %I:%M %p, %b %d %Y')}".replace(' 0', ' ')
                 except ValueError:
                     # If parsing fails, use original string
-                    formatted_dates.append(dt_str)
-            
-            formatted_datetime = ' and '.join(formatted_dates)
+                    formatted_datetime = event['datetime']
+            elif ' and ' in event['datetime']:
+                # Handle multiple individual dates
+                date_strings = event['datetime'].split(' and ')
+                formatted_dates = []
+                for dt_str in date_strings:
+                    try:
+                        dt = datetime.strptime(dt_str.strip(), '%Y-%m-%d %H:%M:%S')
+                        formatted_date = dt.strftime('%A %I:%M %p, %b %d %Y').replace(' 0', ' ')
+                        formatted_dates.append(formatted_date)
+                    except ValueError:
+                        formatted_dates.append(dt_str)
+                formatted_datetime = ' and '.join(formatted_dates)
+            else:
+                # Handle single date
+                try:
+                    dt = datetime.strptime(event['datetime'].strip(), '%Y-%m-%d %H:%M:%S')
+                    formatted_datetime = dt.strftime('%A %I:%M %p, %b %d %Y').replace(' 0', ' ')
+                except ValueError:
+                    formatted_datetime = event['datetime']
             
             # Create title with link if URL exists
             title_html = event["title"]
@@ -291,77 +328,81 @@ class ClaudeAnalyzer(BaseAnalyzer):
         for source, count in sources.items():
             logger.debug(f"- {source}: {count} events")
         
-        # Reduce batch size and add validation
-        BATCH_SIZE = 15
+        # Use smaller batch size
+        total_batches = (len(events) + self.batch_size - 1) // self.batch_size
         all_results = []
-        total_batches = (len(events) + BATCH_SIZE - 1) // BATCH_SIZE
         
-        for i in range(0, len(events), BATCH_SIZE):
-            batch = events[i:i + BATCH_SIZE]
-            batch_num = i//BATCH_SIZE + 1
+        for i in range(0, len(events), self.batch_size):
+            batch = events[i:i + self.batch_size]
+            batch_num = i//self.batch_size + 1
             
             logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} events)")
             logger.debug("Events in this batch:")
             for event in batch:
                 logger.debug(f"- {event.get('title', 'Unknown Title')}")
             
-            try:
-                # Create the prompt for this batch
-                prompt = f'''Format these events in HTML. Include ALL event details exactly as provided.
-                IMPORTANT: All dates MUST be formatted as complete dates with times in ISO format (YYYY-MM-DD HH:MM:SS).
-                If an event has only a time, use today's date. If an event has only a date, use 00:00:00 for the time.
-                
-                Given these events from the calendar:
-                {json.dumps(batch, indent=2)}
-                
-                Format your response in HTML. Each event MUST be wrapped in a div with data-type="event" and MUST follow this EXACT structure:
-                
-                <div data-type="event">
-                    <div data-type="title"><a href="[EXACT url from JSON]">[EXACT event title from JSON]</a></div>
-                    <div data-type="datetime">[Date in YYYY-MM-DD HH:MM:SS format]</div>
-                    <div data-type="image-container"><img src="[EXACT image_url from JSON]" alt="[EXACT event title]" style="width:100%; height:100%; object-fit:cover;"></div>
-                    <div data-type="description">[EXACT description from JSON if it exists]</div>
-                </div>
-                
-                Example datetime formats:
-                - "2024-01-01 19:00:00" for a 7pm event
-                - "2024-01-01 00:00:00" for an all-day event
-                - Multiple dates should be separated by " and "
-                
-                Do not add any extra elements or modify the structure. Each event must have these exact data-type attributes.
-                '''
-                
-                # Get response from Anthropic client (synchronous)
-                logger.debug("Making request to Claude API...")
-                completion = self.client.messages.create(
-                    model="claude-3-sonnet-20240229",
-                    max_tokens=4000,
-                    temperature=0,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                logger.debug(f"Response received, type: {type(completion)}")
-                
-                # Extract content directly
-                if completion and hasattr(completion, 'content'):
-                    logger.debug("Extracting content from completion...")
-                    content = completion.content[0].text if completion.content else ""
-                    logger.debug(f"Content extracted, length: {len(content)}")
-                else:
-                    logger.error("Invalid completion object received")
-                    continue
-                
-                if '<div data-type="event">' in content:
-                    content = content[content.index('<div data-type="event">'):]
-                    logger.debug(f"Extracted events HTML (length: {len(content)})")
-                    all_results.append(content)
-                    logger.info(f"Successfully processed batch {batch_num}/{total_batches}")
-                else:
-                    logger.error(f"No events found in response for batch {batch_num}")
+            # Add retry logic
+            for attempt in range(self.max_retries):
+                try:
+                    # Create the prompt for this batch
+                    prompt = f'''Format these events in HTML. Include ALL event details exactly as provided.
+                    IMPORTANT: For events with multiple dates, you MUST include ALL dates in the datetime field, separated by " and ".
+                    Each date MUST be formatted in ISO format (YYYY-MM-DD HH:MM:SS).
+
+                    For example, if an event occurs on multiple dates:
+                    <div data-type="datetime">2024-01-01 19:00:00 and 2024-01-02 19:00:00 and 2024-01-03 19:00:00</div>
+
+                    Given these events from the calendar:
+                    {json.dumps(batch, indent=2)}
+
+                    Format your response in HTML. Each event MUST be wrapped in a div with data-type="event" and MUST follow this EXACT structure:
+
+                    <div data-type="event">
+                        <div data-type="title"><a href="[EXACT url from JSON]">[EXACT event title from JSON]</a></div>
+                        <div data-type="datetime">[ALL dates in YYYY-MM-DD HH:MM:SS format, separated by " and "]</div>
+                        <div data-type="image-container"><img src="[EXACT image_url from JSON]" alt="[EXACT event title]" style="width:100%; height:100%; object-fit:cover;"></div>
+                        <div data-type="description">[EXACT description from JSON if it exists]</div>
+                    </div>
+
+                    Example datetime formats:
+                    - Single date: "2024-01-01 19:00:00"
+                    - Multiple dates: "2024-01-01 19:00:00 and 2024-01-02 19:00:00"
+                    - All-day event: "2024-01-01 00:00:00"
+
+                    Do not add any extra elements or modify the structure. Each event must have these exact data-type attributes.
+                    '''
                     
-            except Exception as e:
-                logger.error(f"Failed to process batch {batch_num}/{total_batches}: {e}", exc_info=True)
-                continue
-        
+                    logger.debug(f"Making request to Claude API (attempt {attempt + 1}/{self.max_retries})...")
+                    completion = self.client.messages.create(
+                        model="claude-3-sonnet-20240229",
+                        max_tokens=4000,
+                        temperature=0,
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    
+                    # If request succeeds, process the response
+                    logger.debug(f"Response received, type: {type(completion)}")
+                    if completion and hasattr(completion, 'content'):
+                        content = completion.content[0].text if completion.content else ""
+                        if '<div data-type="event">' in content:
+                            content = content[content.index('<div data-type="event">'):]
+                            all_results.append(content)
+                            logger.info(f"Successfully processed batch {batch_num}/{total_batches}")
+                            # Add delay between successful batches
+                            if i + self.batch_size < len(events):
+                                time.sleep(1)
+                            break
+                    
+                except Exception as e:
+                    wait_time = (2 ** attempt) * self.retry_delay
+                    if attempt < self.max_retries - 1:
+                        logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                        logger.info(f"Waiting {wait_time}s before retry...")
+                        time.sleep(wait_time)
+                    else:
+                        logger.error(f"All attempts failed for batch {batch_num}: {str(e)}")
+                        continue
+
         # Combine and organize all results
         if all_results:
             combined_content = '\n'.join(all_results)

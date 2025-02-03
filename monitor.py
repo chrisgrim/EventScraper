@@ -35,8 +35,8 @@ class WebMonitor:
         
     def _setup_scrapers(self):
         return {
-            'california': CaliforniaTheatreScraper(self.config.get('california', {})),
-            # 'petaluma': PetalumaScraper(self.config.get('petaluma', {})),
+            # 'california': CaliforniaTheatreScraper(self.config.get('california', {})),
+            'petaluma': PetalumaScraper(self.config.get('petaluma', {})),
             # 'northbay': NorthBayScraper(self.config.get('northbay', {}))
         }
     
