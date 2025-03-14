@@ -1,8 +1,0 @@
-# Build the Docker image
-docker build -t events-scraper .
-
-# Run the scraper (normal mode)
-docker run -it --rm --env-file .env -e DEBUG=1 events-scraper python3 monitor.py
-
-# Run in test mode
-docker run -it --rm --env-file .env -e DEBUG=1 -e TEST_MODE=1 events-scraper python3 monitor.py 

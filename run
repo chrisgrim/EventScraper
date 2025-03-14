@@ -1,8 +1,45 @@
 #!/bin/bash
-docker stop web-monitor
-docker rm web-monitor
-docker build --no-cache -t web-monitor .
+#
+# Event Scraper Runner Script
+# ---------------------------
+# This script builds and runs the event scraper Docker container
+# with appropriate resource limits to avoid impacting other services.
+#
+
+# Colors for terminal output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}Starting Events Scraper...${NC}"
+echo "$(date): Beginning scraper run" >> /var/log/events-scraper.log
+
+# Step 1: Clean up any existing containers with the same name
+echo -e "${YELLOW}Cleaning up any existing containers...${NC}"
+docker stop events-scraper 2>/dev/null || true
+docker rm events-scraper 2>/dev/null || true
+
+# Step 2: Build the Docker image
+echo -e "${YELLOW}Building Docker image...${NC}"
+docker build -t events-scraper .
+
+# Step 3: Run the scraper with resource limits
+# - --rm: Remove container after execution
+# - --name: Assign a name to the container
+# - --env-file: Load environment variables from .env
+# - --memory: Limit memory to 1GB
+# - --memory-swap: Limit swap to 1GB
+# - --cpus: Limit CPU usage to 1 core
+echo -e "${YELLOW}Running scraper...${NC}"
 docker run --rm \
+  --name events-scraper \
   --env-file .env \
-  web-monitor \
-  python monitor.py
+  --memory=1g \
+  --memory-swap=1g \
+  --cpus=1 \
+  events-scraper \
+  monitor.py
+
+# Step 4: Log completion
+echo -e "${GREEN}Scraper run completed at $(date)${NC}"
+echo "Scraper run completed at $(date)" >> /var/log/events-scraper.log
