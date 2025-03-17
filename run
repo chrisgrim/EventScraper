@@ -37,8 +37,7 @@ docker run --rm \
   --memory=1g \
   --memory-swap=1g \
   --cpus=1 \
-  events-scraper \
-  monitor.py
+  events-scraper
 
 # Step 4: Log completion
 echo -e "${GREEN}Scraper run completed at $(date)${NC}"

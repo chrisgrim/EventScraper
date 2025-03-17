@@ -16,9 +16,9 @@ events-scraper/
 │   ├── base.py            # Base notifier class
 │   └── __init__.py
 ├── scrapers/              # Web scrapers for different venues
-│   ├── petaluma.py        # Petaluma venue scraper (active)
-│   ├── california.py      # California Theatre scraper (inactive)
-│   ├── northbay.py        # North Bay scraper (inactive)
+│   ├── petaluma.py        # Petaluma venue scraper
+│   ├── california.py      # California Theatre scraper
+│   ├── northbay.py        # North Bay scraper
 │   ├── base.py            # Base scraper class
 │   └── __init__.py
 ├── .env                   # Environment variables (not tracked in git)
@@ -60,6 +60,7 @@ Basic configuration for scrapers and analyzers:
 ```json
 {
   "petaluma": {},
+  "california": {},
   "analyzer": {}
 }
 ```
@@ -83,10 +84,10 @@ python monitor.py
 docker build -t events-scraper .
 
 # Run in normal mode
-docker run -it --rm --env-file .env events-scraper monitor.py
+docker run -it --rm --env-file .env events-scraper
 
 # Run in test mode
-docker run -it --rm --env-file .env -e TEST_MODE=1 events-scraper monitor.py
+docker run -it --rm --env-file .env -e TEST_MODE=1 events-scraper
 ```
 
 ### Using the Run Script
@@ -130,11 +131,6 @@ The application is set up to run weekly on Sunday at 2 AM via a cron job:
 - For Docker issues, use `docker logs events-scraper`
 - To run in debug mode, set `DEBUG=1` in your .env file
 - For email issues, run `python test_email.py` to test SMTP configuration
-
-## Documentation
-
-- `SETUP.md` contains detailed deployment instructions
-- `MAINTENANCE.md` provides guidance for routine maintenance and troubleshooting
 
 ## License
 

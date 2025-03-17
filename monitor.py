@@ -27,7 +27,7 @@ class WebMonitor:
             'SCRAPE_ONLY': False,    # Only perform scraping, no analysis or notifications
             'SKIP_CLAUDE': False,    # Skip sending to Claude for analysis
             'SKIP_EMAIL': False,     # Skip sending email notifications
-            'DEBUG_CLAUDE': True,    # Enable detailed logging for Claude API interactions
+            'DEBUG_CLAUDE': False,   # Enable detailed logging for Claude API interactions (changed to False)
             'TEST_MODE': os.getenv('TEST_MODE', '0').lower() in ('1', 'true')  # Use env var with default False
         }
         self.config = self.load_config()
@@ -50,9 +50,9 @@ class WebMonitor:
             dict: Dictionary of scraper name -> scraper instance
         """
         return {
-            # 'california': CaliforniaTheatreScraper(self.config.get('california', {})),
+            'california': CaliforniaTheatreScraper(self.config.get('california', {})),
             'petaluma': PetalumaScraper(self.config.get('petaluma', {})),
-            # 'northbay': NorthBayScraper(self.config.get('northbay', {}))
+            'northbay': NorthBayScraper(self.config.get('northbay', {}))
         }
     
     def _setup_analyzer(self):
@@ -71,6 +71,11 @@ class WebMonitor:
             logging.getLogger('analyzers.claude').setLevel(logging.DEBUG)
             logging.getLogger('httpx').setLevel(logging.DEBUG)  # For HTTP requests
             logging.getLogger(__name__).setLevel(logging.DEBUG)
+        else:
+            # Set to INFO level when debug is off
+            logging.getLogger('analyzers.claude').setLevel(logging.INFO)
+            logging.getLogger('httpx').setLevel(logging.WARNING)
+            logging.getLogger(__name__).setLevel(logging.INFO)
         return analyzer
     
     def _scrape_all_events(self):

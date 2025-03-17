@@ -268,15 +268,45 @@ class ClaudeAnalyzer(BaseAnalyzer):
             elif ' and ' in event['datetime']:
                 # Handle multiple individual dates
                 date_strings = event['datetime'].split(' and ')
-                formatted_dates = []
-                for dt_str in date_strings:
+                
+                # For events with many dates (like theatrical runs), use a more concise format
+                if len(date_strings) > 3:
                     try:
-                        dt = datetime.strptime(dt_str.strip(), '%Y-%m-%d %H:%M:%S')
-                        formatted_date = dt.strftime('%A %I:%M %p, %b %d %Y').replace(' 0', ' ')
-                        formatted_dates.append(formatted_date)
+                        # Parse the first and last dates to create a range
+                        first_date = datetime.strptime(date_strings[0].strip(), '%Y-%m-%d %H:%M:%S')
+                        last_date = datetime.strptime(date_strings[-1].strip(), '%Y-%m-%d %H:%M:%S')
+                        
+                        # Check if they all have the same time
+                        same_time = True
+                        first_time = first_date.strftime('%I:%M %p')
+                        for dt_str in date_strings[1:]:
+                            dt = datetime.strptime(dt_str.strip(), '%Y-%m-%d %H:%M:%S')
+                            if dt.strftime('%I:%M %p') != first_time:
+                                same_time = False
+                                break
+                        
+                        # Format as a range with performance count
+                        if same_time and len(date_strings) > 5:
+                            # For runs with consistent times
+                            time_str = first_date.strftime('%I:%M %p').replace(' 0', ' ')
+                            formatted_datetime = f"Runs {first_date.strftime('%b %d')} - {last_date.strftime('%b %d, %Y')} at {time_str} ({len(date_strings)} performances)"
+                        else:
+                            # For shorter runs or inconsistent times
+                            formatted_datetime = f"Runs {first_date.strftime('%b %d')} - {last_date.strftime('%b %d, %Y')}"
                     except ValueError:
-                        formatted_dates.append(dt_str)
-                formatted_datetime = ' and '.join(formatted_dates)
+                        # Fallback to a simple message if parsing fails
+                        formatted_datetime = f"Multiple dates from {date_strings[0]} to {date_strings[-1]}"
+                else:
+                    # For just a few dates, keep the original formatting
+                    formatted_dates = []
+                    for dt_str in date_strings:
+                        try:
+                            dt = datetime.strptime(dt_str.strip(), '%Y-%m-%d %H:%M:%S')
+                            formatted_date = dt.strftime('%A %I:%M %p, %b %d %Y').replace(' 0', ' ')
+                            formatted_dates.append(formatted_date)
+                        except ValueError:
+                            formatted_dates.append(dt_str)
+                    formatted_datetime = ' and '.join(formatted_dates)
             else:
                 # Handle single date
                 try:
